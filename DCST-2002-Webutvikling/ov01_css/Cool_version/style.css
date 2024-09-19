@@ -1,4 +1,5 @@
-
+/* klasseselektor hentes fra html class, id hentes fra html id. 
+class hentes med ".", id hentes med "#"*/
 body, h1, h2, p, ul, ol, li, table, th, td {
     margin: 0;
     padding: 0;

@@ -12,10 +12,11 @@ int main()
     signal(SIGTERM, handler);
     signal(SIGUSR1, handler);
     signal(SIGSEGV, handler);
+    signal(SIGWINCH, handler);
 
-/*    char *pointer = NULL;
-    *pointer = 10;
-*/
+    // char *pointer = NULL;
+    // *pointer = 10;
+
     while (1)
     {
         printf("Sleeping for 5 seconds...\n");
