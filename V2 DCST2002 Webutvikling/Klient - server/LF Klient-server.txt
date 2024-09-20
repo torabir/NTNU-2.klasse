@@ -1,0 +1,296 @@
+Endret filer i server/src/-mappen
+server/src/task-service.ts:
+import pool from './mysql-pool';
+
+export type Task = {
+  id: number;
+  title: string;
+  done: boolean;
+};
+
+class TaskService {
+  /**
+   * Get task with given id.
+   */
+  get(id: number) {
+    return new Promise<Task | undefined>((resolve, reject) => {
+      pool.query('SELECT * FROM Tasks WHERE id = ?', [id], (error, results) => {
+        if (error) return reject(error);
+
+        resolve(results[0]);
+      });
+    });
+  }
+
+  /**
+   * Get all tasks.
+   */
+  getAll() {
+    return new Promise<Task[]>((resolve, reject) => {
+      pool.query('SELECT * FROM Tasks', (error, results) => {
+        if (error) return reject(error);
+
+        resolve(results);
+      });
+    });
+  }
+
+  /**
+   * Create new task having the given title.
+   *
+   * Resolves the newly created task id.
+   */
+  create(title: string) {
+    return new Promise<number>((resolve, reject) => {
+      pool.query('INSERT INTO Tasks SET title=?', [title], (error, results) => {
+        if (error) return reject(error);
+
+        resolve(Number(results.insertId));
+      });
+    });
+  }
+
+  /**
+   * Update given task.
+   */
+  update(task: Task) {
+    return new Promise<void>((resolve, reject) => {
+      pool.query(
+        'UPDATE Tasks SET title=?, done=? WHERE id=?',
+        [task.title, task.done, task.id],
+        (error, _results) => {
+          if (error) return reject(error);
+
+          resolve();
+        }
+      );
+    });
+  }
+
+  /**
+   * Delete task with given id.
+   */
+  delete(id: number) {
+    return new Promise<void>((resolve, reject) => {
+      pool.query('DELETE FROM Tasks WHERE id = ?', [id], (error, results) => {
+        if (error) return reject(error);
+
+        resolve();
+      });
+    });
+  }
+}
+
+const taskService = new TaskService();
+export default taskService;
+server/src/task-router.ts:
+import express from 'express';
+import taskService from './task-service';
+
+/**
+ * Express router containing task methods.
+ */
+const router = express.Router();
+
+router.get('/tasks', (_request, response) => {
+  taskService
+    .getAll()
+    .then((rows) => response.send(rows))
+    .catch((error) => response.status(500).send(error));
+});
+
+router.get('/tasks/:id', (request, response) => {
+  const id = Number(request.params.id);
+  taskService
+    .get(id)
+    .then((task) => (task ? response.send(task) : response.status(404).send('Task not found')))
+    .catch((error) => response.status(500).send(error));
+});
+
+// Example request body: { title: "Ny oppgave" }
+// Example response body: { id: 4 }
+router.post('/tasks', (request, response) => {
+  const data = request.body;
+  if (data && data.title.length != 0)
+    taskService
+      .create(data.title)
+      .then((id) => response.send({ id: id }))
+      .catch((error) => response.status(500).send(error));
+  else response.status(400).send('Missing task title');
+});
+
+// Example request body: { id: 4, title: "Ny oppgave", done: true }
+router.put('/tasks', (request, response) => {
+  const data = request.body;
+  if (
+    typeof data.id == 'number' &&
+    typeof data.title == 'string' &&
+    data.title.length != 0 &&
+    typeof data.done == 'boolean'
+  )
+    taskService
+      .update({ id: data.id, title: data.title, done: data.done })
+      .then(() => response.send())
+      .catch((error) => response.status(500).send(error));
+  else response.status(400).send('Missing task properties');
+});
+
+router.delete('/tasks/:id', (request, response) => {
+  taskService
+    .delete(Number(request.params.id))
+    .then((_result) => response.send())
+    .catch((error) => response.status(500).send(error));
+});
+
+export default router;
+Endret filer i client/src/-mappen
+client/src/task-service.tsx:
+import axios from 'axios';
+
+axios.defaults.baseURL = 'http://localhost:3000/api/v2';
+
+export type Task = {
+  id: number;
+  title: string;
+  done: boolean;
+};
+
+class TaskService {
+  /**
+   * Get task with given id.
+   */
+  get(id: number) {
+    return axios.get<Task>('/tasks/' + id).then((response) => response.data);
+  }
+
+  /**
+   * Get all tasks.
+   */
+  getAll() {
+    return axios.get<Task[]>('/tasks').then((response) => response.data);
+  }
+
+  /**
+   * Create new task having the given title.
+   *
+   * Resolves the newly created task id.
+   */
+  create(title: string) {
+    return axios
+      .post<{ id: number }>('/tasks', { title: title })
+      .then((response) => response.data.id);
+  }
+
+  /**
+   * Update given task.
+   */
+  update(task: Task) {
+    return axios.put('/tasks', task).then((response) => response.data);
+  }
+
+  /**
+   * Delete task with given id.
+   */
+  delete(id: number) {
+    return axios.delete('/tasks/' + id).then((response) => response.data);
+  }
+}
+
+const taskService = new TaskService();
+export default taskService;
+client/src/index.tsx:
+import ReactDOM from 'react-dom';
+import * as React from 'react';
+import { Component } from 'react-simplified';
+import { Card, Row, Column, Form, Button } from './widgets';
+import taskService, { Task } from './task-service';
+
+class TaskList extends Component {
+  tasks: Task[] = [];
+
+  render() {
+    return (
+      <Card title="Tasks">
+        <Row>
+          <Column width={4}>
+            <b>Title</b>
+          </Column>
+          <Column width={1}>
+            <b>Done</b>
+          </Column>
+        </Row>
+        {this.tasks.map((task) => (
+          <Row key={task.id}>
+            <Column width={4}>{task.title}</Column>
+            <Column width={1}>
+              <Form.Checkbox
+                checked={task.done}
+                onChange={() => {
+                  taskService
+                    .update({ id: task.id, title: task.title, done: !task.done })
+                    .then(() => this.mounted()); // Update tasks if success
+                }}
+              ></Form.Checkbox>
+            </Column>
+            <Column width={1}>
+              <Button.Danger
+                small
+                onClick={() => taskService.delete(task.id).then(() => this.mounted())} // Update tasks if success
+              >
+                &times;
+              </Button.Danger>
+            </Column>
+          </Row>
+        ))}
+      </Card>
+    );
+  }
+
+  mounted() {
+    taskService.getAll().then((tasks) => (this.tasks = tasks));
+  }
+}
+
+class TaskNew extends Component {
+  title = '';
+
+  render() {
+    return (
+      <Card title="New task">
+        <Row>
+          <Column width={1}>
+            <Form.Label>Title:</Form.Label>
+          </Column>
+          <Column width={4}>
+            <Form.Input
+              type="text"
+              value={this.title}
+              onChange={(event) => (this.title = event.currentTarget.value)}
+            />
+          </Column>
+        </Row>
+        <Button.Success
+          onClick={() => {
+            taskService.create(this.title).then(() => {
+              // Reloads the tasks in the Tasks component
+              TaskList.instance()?.mounted(); // .? meaning: call TaskList.instance().mounted() if TaskList.instance() does not return null
+              this.title = '';
+            });
+          }}
+        >
+          Create
+        </Button.Success>
+      </Card>
+    );
+  }
+}
+
+const root = document.getElementById('root');
+if (root)
+  ReactDOM.render(
+    <>
+      <TaskList />
+      <TaskNew />
+    </>,
+    root
+  );

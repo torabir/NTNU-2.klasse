@@ -1,0 +1,307 @@
+server/src/chat-server.ts:
+import type http from 'http';
+import type https from 'https';
+import WebSocket from 'ws';
+
+/**
+ * In message type (from client).
+ */
+export type ClientMessage = { text: string } | { addUser: string } | { removeUser: string };
+/**
+ * Out message type (to client).
+ */
+export type ServerMessage = { text: string } | { users: string[] };
+
+/**
+ * Chat server
+ */
+export default class ChatServer {
+  users: string[] = [];
+
+  /**
+   * Constructs a WebSocket server that will respond to the given path on webServer.
+   */
+  constructor(webServer: http.Server | https.Server, path: string) {
+    const server = new WebSocket.Server({ server: webServer, path: path + '/chat' });
+
+    server.on('connection', (connection, _request) => {
+      connection.on('message', (message) => {
+        const data: ClientMessage = JSON.parse(message.toString());
+        if ('addUser' in data) {
+          this.users.push(data.addUser);
+          const message = JSON.stringify({ users: this.users } as ServerMessage);
+          server.clients.forEach((connection) => connection.send(message));
+        }
+        if ('removeUser' in data) {
+          this.users = this.users.filter((e) => e != data.removeUser);
+          const message = JSON.stringify({ users: this.users } as ServerMessage);
+          server.clients.forEach((connection) => connection.send(message));
+        }
+        if ('text' in data) {
+          // Send the message to all current client connections
+          server.clients.forEach((connection) =>
+            connection.send(JSON.stringify({ text: data.text } as ServerMessage))
+          );
+        }
+      });
+    });
+  }
+}
+server/src/server.ts:
+/**
+ * Web server entry point used in `npm start`.
+ */
+
+import app from './app';
+import express from 'express';
+import path from 'path';
+import http from 'http';
+import ChatServer from './chat-server';
+
+// Serve client files
+app.use(express.static(path.join(__dirname, '/../../client/public')));
+
+const webServer = http.createServer(app);
+const webSocketServer = new ChatServer(webServer, '/api/v1');
+
+const port = 3000;
+webServer.listen(port, () => {
+  console.info(`Server running on port ${port}`);
+});
+client/src/chat-service.tsx:
+/**
+ * Out message type (to server).
+ */
+export type ClientMessage = { text: string } | { addUser: string } | { removeUser: string };
+/**
+ * In message type (from server).
+ */
+export type ServerMessage = { text: string } | { users: string[] };
+
+/**
+ * Subscription class that enables multiple components to receive events from Chat server.
+ */
+export class Subscription {
+  onopen: () => void = () => {};
+  onmessage: (message: ServerMessage) => void = () => {};
+  onclose: (code: number, reason: string) => void = () => {};
+  onerror: (error: Error) => void = () => {};
+}
+
+/**
+ * Service class to communicate with Chat server.
+ *
+ * Variables and functions marked with @private should not be used outside of this class.
+ */
+class ChatService {
+  /**
+   * Connection to Chat server.
+   *
+   * @private
+   */
+  connection = new WebSocket('ws://localhost:3000/api/v1/chat');
+  /**
+   * Component subscriptions.
+   *
+   * @private
+   */
+  subscriptions = new Set<Subscription>(); // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set
+
+  constructor() {
+    this.connection.onopen = () => {
+      // Call subscription onopen functions when connection is ready
+      this.subscriptions.forEach((subscription) => subscription.onopen());
+    };
+
+    this.connection.onmessage = (event) => {
+      // Call subscription onmessage functions on messages from Chat server
+      const data = event.data;
+      if (typeof data == 'string')
+        this.subscriptions.forEach((subscription) => subscription.onmessage(JSON.parse(data)));
+    };
+
+    this.connection.onclose = (event) => {
+      // Call subscription onclose functions when connection is closed
+      this.subscriptions.forEach((subscription) => subscription.onclose(event.code, event.reason));
+    };
+
+    this.connection.onerror = () => {
+      // Call subscription onerror functions on connection error
+      const error = this.createError();
+      this.subscriptions.forEach((subscription) => subscription.onerror(error));
+    };
+  }
+
+  /**
+   * Create Error object with more helpful information from connection ready state.
+   *
+   * @private
+   */
+  createError() {
+    // Error messages from https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
+    if (this.connection.readyState == WebSocket.CLOSING)
+      return new Error('The connection is in the process of closing.');
+    else if (this.connection.readyState == WebSocket.CLOSED)
+      return new Error("The connection is closed or couldn't be opened.");
+    else return new Error();
+  }
+
+  /**
+   * Returns a subscription that enables multiple components to receive events from Chat server.
+   */
+  subscribe() {
+    const subscription = new Subscription();
+    this.subscriptions.add(subscription);
+
+    // Call subscription.onopen or subscription.onerror() after subscription is returned
+    setTimeout(() => {
+      // Call subscription.onopen() if connection is already opened
+      if (this.connection.readyState == WebSocket.OPEN) subscription.onopen();
+      // Call subscription.onerror() if connection is already in a closing or closed state
+      else if (
+        this.connection.readyState == WebSocket.CLOSING ||
+        this.connection.readyState == WebSocket.CLOSED
+      )
+        subscription.onerror(this.createError());
+    });
+
+    return subscription;
+  }
+
+  /**
+   * Given subscription will no longer receive events from Chat server.
+   */
+  unsubscribe(subscription: Subscription) {
+    if (subscription) this.subscriptions.delete(subscription);
+  }
+
+  /**
+   * Send message to Chat server.
+   */
+  send(message: ClientMessage) {
+    this.connection.send(JSON.stringify(message));
+  }
+}
+
+const chatService = new ChatService();
+export default chatService;
+client/src/chat-component.tsx:
+import * as React from 'react';
+import { KeyboardEvent } from 'react';
+import { Component } from 'react-simplified';
+import chatService, { Subscription } from './chat-service';
+import { Alert, Card, Form, Row, Column } from './widgets';
+
+export class Chat extends Component {
+  subscription: Subscription | null = null;
+  connected = false;
+  messages: string[] = [];
+  users: string[] = [];
+  user = '';
+  message = '';
+
+  render() {
+    return (
+      <Card title={'Chat (' + (this.connected ? 'Connected' : 'Not connected') + ')'}>
+        <Card title="Connected users">
+          {this.users.map((user, i) => (
+            <div key={i}>{user}</div>
+          ))}
+        </Card>
+        <Card title="Messages">
+          {this.messages.map((message, i) => (
+            <div key={i}>{message}</div>
+          ))}
+        </Card>
+        <Card title="New message">
+          <Row>
+            <Column width={2}>
+              <Form.Input
+                type="text"
+                placeholder="User"
+                disabled={this.subscription}
+                value={this.user}
+                onChange={(e) => (this.user = e.currentTarget.value)}
+                onKeyUp={(e: KeyboardEvent<HTMLInputElement>) => {
+                  if (e.key == 'Enter') {
+                    if (!this.subscription) {
+                      // Subscribe to chatService to receive events from Chat server in this component
+                      this.subscription = chatService.subscribe();
+
+                      // Called when connection is ready
+                      this.subscription.onopen = () => {
+                        this.connected = true;
+                        chatService.send({ addUser: this.user });
+
+                        // Remove user when web page is closed
+                        window.addEventListener('beforeunload', () =>
+                          chatService.send({ removeUser: this.user })
+                        );
+                      };
+
+                      // Called on incoming message
+                      this.subscription.onmessage = (message) => {
+                        if ('text' in message) this.messages.push(message.text);
+                        if ('users' in message) this.users = message.users;
+                      };
+
+                      // Called if connection is closed
+                      this.subscription.onclose = (code, reason) => {
+                        this.connected = false;
+                        Alert.danger(
+                          'Connection closed with code ' + code + ' and reason: ' + reason
+                        );
+                      };
+
+                      // Called on connection error
+                      this.subscription.onerror = (error) => {
+                        this.connected = false;
+                        Alert.danger('Connection error: ' + error.message);
+                      };
+                    }
+                  }
+                }}
+              />
+            </Column>
+            <Column>
+              <Form.Input
+                type="text"
+                placeholder="Message"
+                value={this.message}
+                onChange={(e) => (this.message = e.currentTarget.value)}
+                onKeyUp={(e: KeyboardEvent<HTMLInputElement>) => {
+                  if (e.key == 'Enter') {
+                    if (this.connected) {
+                      chatService.send({ text: this.user + ': ' + this.message });
+                      this.message = '';
+                    } else Alert.danger('Not connected to server');
+                  }
+                }}
+              />
+            </Column>
+          </Row>
+        </Card>
+      </Card>
+    );
+  }
+
+  // Unsubscribe from chatService when component is no longer in use
+  beforeUnmount() {
+    if (this.subscription) chatService.unsubscribe(this.subscription);
+  }
+}
+client/src/index.tsx:
+import ReactDOM from 'react-dom';
+import * as React from 'react';
+import { Chat } from './chat-component';
+import { Alert } from './widgets';
+
+const root = document.getElementById('root');
+if (root)
+  ReactDOM.render(
+    <>
+      <Alert />
+      <Chat />
+    </>,
+    root
+  );

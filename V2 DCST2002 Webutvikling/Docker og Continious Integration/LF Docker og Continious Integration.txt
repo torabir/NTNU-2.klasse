@@ -1,0 +1,174 @@
+Del 1
+Basert på eksempelkoden i https://gitlab.com/ntnu-dcst2002/todo-client-tests.
+
+server/src/router.ts:
+import express from 'express';
+import childProcess from 'child_process';
+
+/**
+ * Express router containing task methods.
+ */
+const router = express.Router();
+
+router.post('/run', (req, res) => {
+  if (typeof req.body.language == 'string' && typeof req.body.source == 'string') {
+    let stdout = '';
+    let stderr = '';
+    const process = childProcess.spawn('docker', [
+      'run',
+      '--rm',
+      'node-image',
+      'node',
+      '-e',
+      req.body.source,
+    ]);
+    process.stdout.on('data', (data) => {
+      stdout += data;
+    });
+    process.stderr.on('data', (data) => {
+      stderr += data;
+    });
+    process.on('close', (exitStatus: number) => {
+      res.send({ exitStatus: exitStatus, stdout: stdout, stderr: stderr });
+    });
+  } else res.status(400).send('Missing properties');
+});
+
+export default router;
+server/src/app.ts:
+import express from 'express';
+import router from './router';
+
+/**
+ * Express application.
+ */
+const app = express();
+
+app.use(express.json());
+
+// Since API is not compatible with v1, API version is increased to v2
+app.use('/api/v2', router);
+
+export default app;
+client/src/index.tsx:
+import ReactDOM from 'react-dom';
+import * as React from 'react';
+import { Component } from 'react-simplified';
+import { Alert, Card, Form, Button } from './widgets';
+import axios from 'axios';
+
+axios.defaults.baseURL = 'http://localhost:3000/api/v2';
+
+class Home extends Component {
+  source = '';
+  exitStatus: number | null = null;
+  stdout = '';
+  stderr = '';
+
+  render() {
+    return (
+      <>
+        <Card title="app.js">
+          <Form.Textarea
+            value={this.source}
+            onChange={(event) => (this.source = event.currentTarget.value)}
+            rows={4}
+          />
+          <Button.Success
+            onClick={() => {
+              axios
+                .post<{ exitStatus: number; stdout: string; stderr: string }>('/run', {
+                  language: 'js',
+                  source: this.source,
+                })
+                .then((response) => {
+                  this.exitStatus = response.data.exitStatus;
+                  this.stdout = response.data.stdout;
+                  this.stderr = response.data.stderr;
+                })
+                .catch((error: Error) => Alert.danger('Could not run app.js: ' + error.message));
+            }}
+          >
+            Run
+          </Button.Success>
+        </Card>
+        <Card title="Standard output">{this.stdout}</Card>
+        <Card title="Standard error">{this.stderr}</Card>
+        <Card title={'Exit status: ' + (this.exitStatus ?? '')}></Card>
+      </>
+    );
+  }
+}
+
+const root = document.getElementById('root');
+if (root)
+  ReactDOM.render(
+    <>
+      <Alert />
+      <Home />
+    </>,
+    root
+  );
+Del 2
+.gitlab-ci.yml:
+
+image: node:latest # Use a docker image from https://hub.docker.com with latest Node.js already installed
+
+variables:
+  # Configure server/src/mysql-pool.js
+  MYSQL_HOST: localhost
+  MYSQL_USER: root # Docker commands are run as root
+  MYSQL_PASSWORD: '' # Default root password is empty string
+  MYSQL_DATABASE: todo-test
+
+stages:
+  - build # Jobs placed in build stage will run first
+  - test # Jobs placed in test stage will run after build-jobs
+
+install:
+  stage: build
+  script:
+    - cd server
+    - npm install
+    - cd ../client
+    - npm install
+  artifacts: # Keep node_modules folder for the following stages
+    paths:
+      - server/node_modules
+      - client/node_modules
+
+prettier:
+  stage: test # The prettier job will run in parallel with the typescript and test jobs
+  script:
+    - cd server
+    - ./node_modules/.bin/prettier --check src/* test/*
+    - cd ../server
+    - ./node_modules/.bin/prettier --check src/* test/*
+
+typescript:
+  stage: test # The typescript job will run in parallel with the typescript and test jobs
+  script:
+    - cd server
+    - ./node_modules/.bin/tsc --noEmit
+    - cd ../client
+    - ./node_modules/.bin/tsc --noEmit
+
+test:
+  stage: test # The test job will run in parallel with the prettier and typescript jobs
+  script:
+    - apt-get update
+    - apt-get -y upgrade
+    - apt-get -y install default-mysql-server
+    - service mysql start
+    # Workaround from https://github.com/mysqljs/mysql/issues/1507#issuecomment-242885003
+    - echo "UPDATE user SET authentication_string=password(''), plugin='mysql_native_password' WHERE
+      user='root';" | mysql mysql
+    - mysqladmin create $MYSQL_DATABASE
+    # Create database table
+    - echo "CREATE TABLE Tasks (id INT NOT NULL AUTO_INCREMENT, title TEXT NOT NULL, done BOOL
+      DEFAULT false, PRIMARY KEY(id));" | mysql $MYSQL_DATABASE
+    - cd server
+    - echo "" > test/config.ts # Create empty config.ts to avoid error on npm test
+    - npm test
+    - cd ../client
+    - npm test

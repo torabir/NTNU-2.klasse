@@ -1,0 +1,858 @@
+SQL setning for å opprette Tasks-databasetabellen:
+CREATE TABLE Tasks (
+  id INT NOT NULL AUTO_INCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  done BOOL,
+  PRIMARY KEY(id)
+);
+Endret filer i server/-mappen
+server/src/task-service.ts:
+import pool from './mysql-pool';
+
+export type Task = {
+  id: number;
+  title: string;
+  description: string;
+  done: boolean;
+};
+
+class TaskService {
+  /**
+   * Get task with given id.
+   */
+  get(id: number) {
+    return new Promise<Task | undefined>((resolve, reject) => {
+      pool.query('SELECT * FROM Tasks WHERE id = ?', [id], (error, results) => {
+        if (error) return reject(error);
+
+        resolve(results[0]);
+      });
+    });
+  }
+
+  /**
+   * Get all tasks.
+   */
+  getAll() {
+    return new Promise<Task[]>((resolve, reject) => {
+      pool.query('SELECT * FROM Tasks', (error, results) => {
+        if (error) return reject(error);
+
+        resolve(results);
+      });
+    });
+  }
+
+  /**
+   * Create new task having the given title.
+   *
+   * Resolves the newly created task id.
+   */
+  create(title: string, description: string) {
+    return new Promise<number>((resolve, reject) => {
+      pool.query(
+        'INSERT INTO Tasks SET title=?, description=?',
+        [title, description],
+        (error, results) => {
+          if (error) return reject(error);
+
+          resolve(Number(results.insertId));
+        }
+      );
+    });
+  }
+
+  /**
+   * Update given task.
+   */
+  update(task: Task) {
+    return new Promise<void>((resolve, reject) => {
+      pool.query(
+        'UPDATE Tasks SET title=?, description=?, done=? WHERE id=?',
+        [task.title, task.description, task.done, task.id],
+        (error, _results) => {
+          if (error) return reject(error);
+
+          resolve();
+        }
+      );
+    });
+  }
+
+  /**
+   * Delete task with given id.
+   */
+  delete(id: number) {
+    return new Promise<void>((resolve, reject) => {
+      pool.query('DELETE FROM Tasks WHERE id = ?', [id], (error, results) => {
+        if (error) return reject(error);
+
+        resolve();
+      });
+    });
+  }
+}
+
+const taskService = new TaskService();
+export default taskService;
+server/src/task-router.ts:
+import express from 'express';
+import taskService from './task-service';
+
+/**
+ * Express router containing task methods.
+ */
+const router = express.Router();
+
+router.get('/tasks', (_request, response) => {
+  taskService
+    .getAll()
+    .then((rows) => response.send(rows))
+    .catch((error) => response.status(500).send(error));
+});
+
+router.get('/tasks/:id', (request, response) => {
+  const id = Number(request.params.id);
+  taskService
+    .get(id)
+    .then((task) => (task ? response.send(task) : response.status(404).send('Task not found')))
+    .catch((error) => response.status(500).send(error));
+});
+
+// Example request body: { title: "Ny oppgave", description: "Ny beskrivelse" }
+// Example response body: { id: 4 }
+router.post('/tasks', (request, response) => {
+  const data = request.body;
+  if (
+    typeof data.title == 'string' &&
+    data.title.length != 0 &&
+    typeof data.description == 'string'
+  )
+    taskService
+      .create(data.title, data.description)
+      .then((id) => response.send({ id: id }))
+      .catch((error) => response.status(500).send(error));
+  else response.status(400).send('Missing task title');
+});
+
+// Example request body: { id: 4, title: "Ny oppgave", description: "Ny beskrivelse", done: true }
+router.put('/tasks', (request, response) => {
+  const data = request.body;
+  if (
+    typeof data.id == 'number' &&
+    typeof data.title == 'string' &&
+    data.title.length != 0 &&
+    typeof data.description == 'string' &&
+    typeof data.done == 'boolean'
+  )
+    taskService
+      .update({ id: data.id, title: data.title, description: data.description, done: data.done })
+      .then(() => response.send())
+      .catch((error) => response.status(500).send(error));
+  else response.status(400).send('Missing task properties');
+});
+
+router.delete('/tasks/:id', (request, response) => {
+  taskService
+    .delete(Number(request.params.id))
+    .then((_result) => response.send())
+    .catch((error) => response.status(500).send(error));
+});
+
+export default router;
+server/test/task-router.test.ts:
+import axios from 'axios';
+import pool from '../src/mysql-pool';
+import app from '../src/app';
+import taskService, { Task } from '../src/task-service';
+
+const testTasks: Task[] = [
+  { id: 1, title: 'Les leksjon', description: 'Les nøye', done: false },
+  { id: 2, title: 'Møt opp på forelesning', description: 'I tide', done: false },
+  { id: 3, title: 'Gjør øving', description: 'Før fristen', done: false },
+];
+
+// Since API is not compatible with v1, API version is increased to v2
+axios.defaults.baseURL = 'http://localhost:3001/api/v2';
+
+let webServer: any;
+beforeAll((done) => {
+  // Use separate port for testing
+  webServer = app.listen(3001, () => done());
+});
+
+beforeEach((done) => {
+  // Delete all tasks, and reset id auto-increment start value
+  pool.query('TRUNCATE TABLE Tasks', (error) => {
+    if (error) return done.fail(error);
+
+    taskService
+      .create(testTasks[0].title, testTasks[0].description)
+      .then(() => taskService.create(testTasks[1].title, testTasks[1].description)) // Create testTask[1] after testTask[0] has been created
+      .then(() => taskService.create(testTasks[2].title, testTasks[2].description)) // Create testTask[2] after testTask[1] has been created
+      .then(() => done()); // Call done() after testTask[2] has been created
+  });
+});
+
+// Stop web server and close connection to MySQL server
+afterAll((done) => {
+  if (!webServer) return done.fail(new Error());
+  webServer.close(() => pool.end(() => done()));
+});
+
+describe('Fetch tasks (GET)', () => {
+  test('Fetch all tasks (200 OK)', (done) => {
+    axios.get('/tasks').then((response) => {
+      expect(response.status).toEqual(200);
+      expect(response.data).toEqual(testTasks);
+      done();
+    });
+  });
+
+  test('Fetch task (200 OK)', (done) => {
+    axios.get('/tasks/1').then((response) => {
+      expect(response.status).toEqual(200);
+      expect(response.data).toEqual(testTasks[0]);
+      done();
+    });
+  });
+
+  test('Fetch task (404 Not Found)', (done) => {
+    axios.get('/tasks/4').catch((error) => {
+      expect(error.message).toEqual('Request failed with status code 404');
+      done();
+    });
+  });
+});
+
+describe('Update task (PUT)', () => {
+  test('Update task (200 OK)', (done) => {
+    axios
+      .put('/tasks', {
+        id: 1,
+        title: 'Les leksjon igjen',
+        description: 'Les ekstra nøye',
+        done: true,
+      })
+      .then((response) => {
+        expect(response.status).toEqual(200);
+        done();
+      });
+  });
+
+  test('Update task (400)', (done) => {
+    axios
+      .put('/tasks', {
+        id: 1,
+        title: '',
+        description: 'Les ekstra nøye',
+      })
+      .catch((error) => {
+        expect(error.message).toEqual('Request failed with status code 400');
+        done();
+      });
+  });
+});
+
+describe('Create new task (POST)', () => {
+  test('Create new task (200 OK)', (done) => {
+    axios.post('/tasks', { title: 'Kaffepause', description: 'Svart kaffe' }).then((response) => {
+      expect(response.status).toEqual(200);
+      expect(response.data).toEqual({ id: 4 });
+      done();
+    });
+  });
+
+  test('Create new task (400)', (done) => {
+    axios.post('/tasks', { title: '', description: 'Svart kaffe' }).catch((error) => {
+      expect(error.message).toEqual('Request failed with status code 400');
+      done();
+    });
+  });
+});
+
+describe('Delete task (DELETE)', () => {
+  test('Delete task (200 OK)', (done) => {
+    axios.delete('/tasks/2').then((response) => {
+      expect(response.status).toEqual(200);
+      done();
+    });
+  });
+});
+Endret filer i client/-mappen
+client/src/task-service.tsx:
+import axios from 'axios';
+
+axios.defaults.baseURL = 'http://localhost:3000/api/v2';
+
+export type Task = {
+  id: number;
+  title: string;
+  description: string;
+  done: boolean;
+};
+
+class TaskService {
+  /**
+   * Get task with given id.
+   */
+  get(id: number) {
+    return axios.get<Task>('/tasks/' + id).then((response) => response.data);
+  }
+
+  /**
+   * Get all tasks.
+   */
+  getAll() {
+    return axios.get<Task[]>('/tasks').then((response) => response.data);
+  }
+
+  /**
+   * Create new task having the given title.
+   *
+   * Resolves the newly created task id.
+   */
+  create(title: string, description: string) {
+    return axios
+      .post<{ id: number }>('/tasks', {
+        title: title,
+        description: description,
+      })
+      .then((response) => response.data.id);
+  }
+
+  /**
+   * Update given task.
+   */
+  update(task: Task) {
+    return axios.put('/tasks', task).then((response) => response.data);
+  }
+
+  /**
+   * Delete task with given id.
+   */
+  delete(id: number) {
+    return axios.delete('/tasks/' + id).then((response) => response.data);
+  }
+}
+
+const taskService = new TaskService();
+export default taskService;
+client/src/task-components.tsx:
+import * as React from 'react';
+import { Component } from 'react-simplified';
+import { Alert, Card, Row, Column, Form, Button } from './widgets';
+import { NavLink } from 'react-router-dom';
+import taskService, { Task } from './task-service';
+import { createHashHistory } from 'history';
+
+const history = createHashHistory(); // Use history.push(...) to programmatically change path, for instance after successfully saving a student
+
+/**
+ * Renders task list.
+ */
+export class TaskList extends Component {
+  tasks: Task[] = [];
+
+  render() {
+    return (
+      <>
+        <Card title="Tasks">
+          {this.tasks.map((task) => (
+            <Row key={task.id}>
+              <Column>
+                <NavLink to={'/tasks/' + task.id}>{task.title}</NavLink>
+              </Column>
+            </Row>
+          ))}
+        </Card>
+        <Button.Success onClick={() => history.push('/tasks/new')}>New task</Button.Success>
+      </>
+    );
+  }
+
+  mounted() {
+    taskService
+      .getAll()
+      .then((tasks) => (this.tasks = tasks))
+      .catch((error) => Alert.danger('Error getting tasks: ' + error.message));
+  }
+}
+
+/**
+ * Renders a specific task.
+ */
+export class TaskDetails extends Component<{ match: { params: { id: number } } }> {
+  task: Task = { id: 0, title: '', description: '', done: false };
+
+  render() {
+    return (
+      <>
+        <Card title="Task">
+          <Row>
+            <Column width={2}>Title:</Column>
+            <Column>{this.task.title}</Column>
+          </Row>
+          <Row>
+            <Column width={2}>Description:</Column>
+            <Column>{this.task.description}</Column>
+          </Row>
+          <Row>
+            <Column width={2}>Done:</Column>
+            <Column>
+              <Form.Checkbox checked={this.task.done} onChange={() => {}} disabled />
+            </Column>
+          </Row>
+        </Card>
+        <Button.Success
+          onClick={() => history.push('/tasks/' + this.props.match.params.id + '/edit')}
+        >
+          Edit
+        </Button.Success>
+      </>
+    );
+  }
+
+  mounted() {
+    taskService
+      .get(this.props.match.params.id)
+      .then((task) => (this.task = task))
+      .catch((error) => Alert.danger('Error getting task: ' + error.message));
+  }
+}
+
+/**
+ * Renders form to edit a specific task.
+ */
+export class TaskEdit extends Component<{ match: { params: { id: number } } }> {
+  task: Task = { id: 0, title: '', description: '', done: false };
+
+  render() {
+    return (
+      <>
+        <Card title="Edit task">
+          <Row>
+            <Column width={2}>
+              <Form.Label>Title:</Form.Label>
+            </Column>
+            <Column>
+              <Form.Input
+                type="text"
+                value={this.task.title}
+                onChange={(event) => (this.task.title = event.currentTarget.value)}
+              />
+            </Column>
+          </Row>
+          <Row>
+            <Column width={2}>
+              <Form.Label>Description:</Form.Label>
+            </Column>
+            <Column>
+              <Form.Textarea
+                value={this.task.description}
+                onChange={(event) => (this.task.description = event.currentTarget.value)}
+                rows={10}
+              />
+            </Column>
+          </Row>
+          <Row>
+            <Column width={2}>Done:</Column>
+            <Column>
+              <Form.Checkbox
+                checked={this.task.done}
+                onChange={(event) => (this.task.done = event.currentTarget.checked)}
+              />
+            </Column>
+          </Row>
+        </Card>
+        <Row>
+          <Column>
+            <Button.Success onClick={this.save}>Save</Button.Success>
+          </Column>
+          <Column right>
+            <Button.Danger onClick={this.delete}>Delete</Button.Danger>
+          </Column>
+        </Row>
+      </>
+    );
+  }
+
+  mounted() {
+    taskService
+      .get(this.props.match.params.id)
+      .then((task) => (this.task = task))
+      .catch((error) => Alert.danger('Error getting task: ' + error.message));
+  }
+
+  save() {
+    taskService
+      .update(this.task)
+      .then(() => history.push('/tasks/' + this.task.id))
+      .catch((error) => Alert.danger('Error saving task: ' + error.message));
+  }
+
+  delete() {
+    taskService
+      .delete(this.task.id)
+      .then(() => history.push('/tasks'))
+      .catch((error) => Alert.danger('Error deleting task: ' + error.message));
+  }
+}
+
+/**
+ * Renders form to create new task.
+ */
+export class TaskNew extends Component {
+  title = '';
+  description = '';
+
+  render() {
+    return (
+      <>
+        <Card title="New task">
+          <Row>
+            <Column width={2}>
+              <Form.Label>Title:</Form.Label>
+            </Column>
+            <Column>
+              <Form.Input
+                type="text"
+                value={this.title}
+                onChange={(event) => (this.title = event.currentTarget.value)}
+              />
+            </Column>
+          </Row>
+          <Row>
+            <Column width={2}>
+              <Form.Label>Description:</Form.Label>
+            </Column>
+            <Column>
+              <Form.Textarea
+                value={this.description}
+                onChange={(event) => (this.description = event.currentTarget.value)}
+                rows={10}
+              />
+            </Column>
+          </Row>
+        </Card>
+        <Button.Success
+          onClick={() => {
+            taskService
+              .create(this.title, this.description)
+              .then((id) => history.push('/tasks/' + id))
+              .catch((error) => Alert.danger('Error creating task: ' + error.message));
+          }}
+        >
+          Create
+        </Button.Success>
+      </>
+    );
+  }
+}
+client/test/alert-widget.test.tsx:
+import * as React from 'react';
+import { Alert } from '../src/widgets';
+import { shallow } from 'enzyme';
+
+describe('Alert tests', () => {
+  test('No alerts initially', () => {
+    const wrapper = shallow(<Alert />);
+
+    expect(wrapper.matchesElement(<div></div>)).toEqual(true);
+  });
+
+  test('Show alert message', (done) => {
+    const wrapper = shallow(<Alert />);
+
+    Alert.danger('test');
+
+    // Wait for events to complete
+    setTimeout(() => {
+      expect(
+        wrapper.matchesElement(
+          <div>
+            <div>
+              test
+              <button />
+            </div>
+          </div>
+        )
+      ).toEqual(true);
+
+      done();
+    });
+  });
+
+  test('Close alert message', (done) => {
+    const wrapper = shallow(<Alert />);
+
+    Alert.danger('test');
+
+    // Wait for events to complete
+    setTimeout(() => {
+      expect(
+        wrapper.matchesElement(
+          <div>
+            <div>
+              test
+              <button />
+            </div>
+          </div>
+        )
+      ).toEqual(true);
+
+      wrapper.find('button.btn-close').simulate('click');
+
+      expect(wrapper.matchesElement(<div></div>)).toEqual(true);
+
+      done();
+    });
+  });
+
+  test('Open 3 alert messages, and close the second alert message', (done) => {
+    const wrapper = shallow(<Alert />);
+
+    Alert.danger('test1');
+    Alert.danger('test2');
+    Alert.danger('test3');
+
+    // Wait for events to complete
+    setTimeout(() => {
+      expect(
+        wrapper.matchesElement(
+          <div>
+            <div>
+              test1
+              <button />
+            </div>
+            <div>
+              test2
+              <button />
+            </div>
+            <div>
+              test3
+              <button />
+            </div>
+          </div>
+        )
+      ).toEqual(true);
+
+      wrapper.find('button.btn-close').at(1).simulate('click');
+
+      expect(
+        wrapper.matchesElement(
+          <div>
+            <div>
+              test1
+              <button />
+            </div>
+            <div>
+              test3
+              <button />
+            </div>
+          </div>
+        )
+      ).toEqual(true);
+
+      done();
+    });
+  });
+});
+client/test/task-components.test.tsx:
+import * as React from 'react';
+import { TaskList, TaskDetails, TaskEdit, TaskNew } from '../src/task-components';
+import { shallow } from 'enzyme';
+import { Form, Button, Column } from '../src/widgets';
+import { NavLink } from 'react-router-dom';
+
+jest.mock('../src/task-service', () => {
+  class TaskService {
+    getAll() {
+      return Promise.resolve([
+        { id: 1, title: 'Les leksjon', description: 'Les nøye', done: true },
+        { id: 2, title: 'Møt opp på forelesning', description: 'I tide', done: false },
+        { id: 3, title: 'Gjør øving', description: 'Før fristen', done: false },
+      ]);
+    }
+
+    get() {
+      return Promise.resolve({ id: 1, title: 'Les leksjon', description: 'Les nøye', done: true });
+    }
+
+    create() {
+      return Promise.resolve(4); // Same as: return new Promise((resolve) => resolve(4));
+    }
+
+    update() {
+      return Promise.resolve();
+    }
+
+    delete() {
+      return Promise.resolve();
+    }
+  }
+  return new TaskService();
+});
+
+describe('Task component tests', () => {
+  test('TaskList draws correctly', (done) => {
+    const wrapper = shallow(<TaskList />);
+
+    // Wait for events to complete
+    setTimeout(() => {
+      expect(
+        wrapper.containsAllMatchingElements([
+          <NavLink to="/tasks/1">Les leksjon</NavLink>,
+          <NavLink to="/tasks/2">Møt opp på forelesning</NavLink>,
+          <NavLink to="/tasks/3">Gjør øving</NavLink>,
+        ])
+      ).toEqual(true);
+      done();
+    });
+  });
+
+  test('TaskDetails draws correctly', (done) => {
+    const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
+
+    setTimeout(() => {
+      expect(
+        wrapper.containsAllMatchingElements([
+          <Column>Les leksjon</Column>,
+          <Column>Les nøye</Column>,
+          // @ts-ignore
+          <Form.Checkbox checked={true} />,
+        ])
+      ).toEqual(true);
+      done();
+    });
+  });
+
+  test('TaskDetails draws correctly (using snapshot)', (done) => {
+    const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
+
+    setTimeout(() => {
+      expect(wrapper).toMatchSnapshot();
+      done();
+    });
+  });
+
+  test('TaskDetails correctly sets location on edit', (done) => {
+    const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
+
+    setTimeout(() => {
+      expect(
+        wrapper.containsAllMatchingElements([
+          <Column>Les leksjon</Column>,
+          <Column>Les nøye</Column>,
+          // @ts-ignore
+          <Form.Checkbox checked={true} />,
+        ])
+      ).toEqual(true);
+
+      wrapper.find(Button.Success).simulate('click');
+
+      setTimeout(() => {
+        expect(location.hash).toEqual('#/tasks/1/edit');
+        done();
+      });
+    });
+  });
+
+  test('TaskEdit draws correctly', (done) => {
+    const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />);
+
+    setTimeout(() => {
+      expect(
+        wrapper.containsAllMatchingElements([
+          // @ts-ignore
+          <Form.Input value="Les leksjon" />,
+          // @ts-ignore
+          <Form.Textarea value="Les nøye" />,
+          // @ts-ignore
+          <Form.Checkbox checked={true} />,
+        ])
+      ).toEqual(true);
+      done();
+    });
+  });
+
+  test('TaskEdit correctly sets location on save', (done) => {
+    const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />);
+
+    setTimeout(() => {
+      expect(
+        wrapper.containsAllMatchingElements([
+          // @ts-ignore
+          <Form.Input value="Les leksjon" />,
+          // @ts-ignore
+          <Form.Textarea value="Les nøye" />,
+          // @ts-ignore
+          <Form.Checkbox checked={true} />,
+        ])
+      ).toEqual(true);
+
+      wrapper
+        .find(Form.Input)
+        .simulate('change', { currentTarget: { value: 'Les leksjon igjen' } });
+      // @ts-ignore
+      expect(wrapper.containsMatchingElement(<Form.Input value="Les leksjon igjen" />)).toEqual(
+        true
+      );
+
+      wrapper
+        .find(Form.Textarea)
+        .simulate('change', { currentTarget: { value: 'Les ekstra nøye' } });
+      // @ts-ignore
+      expect(wrapper.containsMatchingElement(<Form.Textarea value="Les ekstra nøye" />)).toEqual(
+        true
+      );
+
+      wrapper.find(Button.Success).simulate('click');
+
+      setTimeout(() => {
+        expect(location.hash).toEqual('#/tasks/1');
+        done();
+      });
+    });
+  });
+
+  test('TaskEdit correctly sets location on delete', (done) => {
+    const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />);
+
+    setTimeout(() => {
+      expect(
+        wrapper.containsAllMatchingElements([
+          // @ts-ignore
+          <Form.Input value="Les leksjon" />,
+          // @ts-ignore
+          <Form.Textarea value="Les nøye" />,
+          // @ts-ignore
+          <Form.Checkbox checked={true} />,
+        ])
+      ).toEqual(true);
+
+      wrapper.find(Button.Danger).simulate('click');
+
+      setTimeout(() => {
+        expect(location.hash).toEqual('#/tasks');
+        done();
+      });
+    });
+  });
+
+  test('TaskNew correctly sets location on create', (done) => {
+    const wrapper = shallow(<TaskNew />);
+
+    wrapper.find(Form.Input).simulate('change', { currentTarget: { value: 'Kaffepause' } });
+    // @ts-ignore
+    expect(wrapper.containsMatchingElement(<Form.Input value="Kaffepause" />)).toEqual(true);
+
+    wrapper.find(Button.Success).simulate('click');
+    // Wait for events to complete
+    setTimeout(() => {
+      expect(location.hash).toEqual('#/tasks/4');
+      done();
+    });
+  });
+});
