@@ -19,8 +19,8 @@ const testData = [
 let webServer;
 beforeAll(() => webServer = todoApi.listen(3000));
 
-// Denne funksjonen kjører før hver test. Den sørger for at databasen er tilbakestilt
-// ved å slette eksisterende oppgaver og opprette testdataene på nytt.
+// Denne funksjonen kjører før hver test. Den sørger for at databasen er tilbakestilt. 
+// Her sletter vi gamle rader og setter inn de testdata vi definerte over. 
 beforeEach(async () => {
     // Sletter alle eksisterende oppgaver i testData.
     const deleteActions = testData.map(task => taskService.delete(task.id));
@@ -43,7 +43,7 @@ afterAll(async () => {
 });
 
 describe("Fetch tasks (GET)", () => {
-    // Test som sjekker at alle oppgaver hentes riktig (200 OK).
+    //1. Test som sjekker at alle oppgaver hentes riktig (200 OK).
     test("Fetch all tasks (200 OK)", async () => {
         // Sender GET-forespørsel for å hente alle oppgaver.
         const response = await axios.get("/api/v1/tasks");
@@ -54,7 +54,7 @@ describe("Fetch tasks (GET)", () => {
         expect(response.data).toEqual(testData);
     });
 
-    // Test som sjekker at en spesifikk oppgave hentes riktig (200 OK).
+    //2. Test som sjekker at en spesifikk oppgave hentes riktig (200 OK).
     test("Fetch task (200 OK)", async () => {
         const expected = [testData[0]]; // Forventet data er første oppgave i testData.
         // Sender GET-forespørsel for å hente oppgave med ID 1.
@@ -66,7 +66,7 @@ describe("Fetch tasks (GET)", () => {
         expect(response.data).toEqual(expected);
     });
 
-    // Test som sjekker at serverfeil (500) håndteres riktig når alle oppgaver hentes.
+    //3. Test som sjekker at serverfeil (500) håndteres riktig når alle oppgaver hentes.
     test("Fetch all tasks (500 Internal Server Error)", async () => {
         // Lagre den opprinnelige funksjonen før vi mocker den.
         let actualGetAll = taskService.getAll;
@@ -82,7 +82,7 @@ describe("Fetch tasks (GET)", () => {
         taskService.getAll = actualGetAll;
     });
 
-    // Test som sjekker at 404 Not Found returneres når en oppgave ikke finnes.
+    //4. Test som sjekker at 404 Not Found returneres når en oppgave ikke finnes.
     test("Fetch task (404 Not Found)", async () => {
         // Prøv å hente en oppgave med en ugyldig ID (-1).
         try {
@@ -93,7 +93,7 @@ describe("Fetch tasks (GET)", () => {
         }
     });
 
-    // Test som sjekker at serverfeil (500) håndteres riktig når en spesifikk oppgave hentes.
+    //5. Test som sjekker at serverfeil (500) håndteres riktig når en spesifikk oppgave hentes.
     test("Fetch task (500 Internal Server error)", async () => {
         // Lagre den opprinnelige funksjonen før vi mocker den.
         let actualGet = taskService.get;
@@ -111,7 +111,7 @@ describe("Fetch tasks (GET)", () => {
 });
 
 describe("Create new task (POST)", () => {
-    // Test som sjekker at en ny oppgave opprettes riktig (201 Created).
+    //6. Test som sjekker at en ny oppgave opprettes riktig (201 Created).
     test("Create new task (201 Created)", async () => {
         const newTask = { id: 4, title: "Ny oppgave", done: false }; // Ny oppgave å opprette.
         // Sender POST-forespørsel for å opprette en ny oppgave.
@@ -123,7 +123,7 @@ describe("Create new task (POST)", () => {
         expect(response.headers.location).toEqual("tasks/4");
     });
 
-    // Test som sjekker at 400 Bad Request returneres når en oppgave mangler nødvendig informasjon.
+    //7. Test som sjekker at 400 Bad Request returneres når en oppgave mangler nødvendig informasjon.
     test("Create new task (400 Bad Request)", async () => {
         const newTaskMissingId = { title: 'Ny oppgave', done: false }; // Oppgave uten ID.
         // Prøv å opprette en ugyldig oppgave og sjekk om statuskoden er 400 (Bad Request).
@@ -135,7 +135,7 @@ describe("Create new task (POST)", () => {
         }
     });
 
-    // Test som sjekker at serverfeil (500) håndteres riktig ved opprettelse av ny oppgave.
+    //8. Test som sjekker at serverfeil (500) håndteres riktig ved opprettelse av ny oppgave.
     test("Create new task (500 Internal Server error)", async () => {
         const newTaskMissingId = { id: null, title: 'Ny oppgave', done: false }; // Oppgave med ugyldig ID.
         // Prøv å opprette en ugyldig oppgave og sjekk om statuskoden er 500 (Internal Server Error).
@@ -149,7 +149,7 @@ describe("Create new task (POST)", () => {
 });
 
 describe("Delete task (DELETE)", () => {
-    // Test som sjekker at en oppgave slettes riktig (200 OK).
+    //9. Test som sjekker at en oppgave slettes riktig (200 OK).
     test("Delete task (200 OK)", async () => {
         // Sender DELETE-forespørsel for å slette oppgave med ID 2.
         const response = await axios.delete("/api/v1/tasks/2");
@@ -158,7 +158,7 @@ describe("Delete task (DELETE)", () => {
         expect(response.status).toEqual(200);
     });
 
-    // Test som sjekker at serverfeil (500) håndteres riktig ved sletting av oppgave.
+    //10. Test som sjekker at serverfeil (500) håndteres riktig ved sletting av oppgave.
     test("Delete task (500 Internal Server error)", async () => { 
         // Lagre den opprinnelige funksjonen før vi mocker den.
         let actualDelete = taskService.delete;
@@ -172,3 +172,4 @@ describe("Delete task (DELETE)", () => {
 
         // Gjenopprett den opprinnelige funksjonen etter testen.
         taskService.delete = actualDelete
+        

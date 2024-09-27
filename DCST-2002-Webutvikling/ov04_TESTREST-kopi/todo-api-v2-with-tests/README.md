@@ -4,11 +4,17 @@ A simple Todo REST API including unit tests.
 
 ### Instructions
 
-0. The following instructions (1-8) is the teachers instructions. Because this folder is a cloned git submodule, run: 
-    git submodule update --init --recursive
-Note to self, to update the submodule to match updates in the main repo: 
-    git checkout <commit_sha>
-    ??? 
+0. The following instructions (1-8) is the teachers instructions. 
+
+#### Make sure to create and edit a config.js file in root and test-folder. 
+
+#### Make sure to run: 
+
+npm install
+npm install jest --save-dev
+npm install axios --save-dev
+
+
 1. Clone the project:
 
 ```

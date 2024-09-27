@@ -45,17 +45,17 @@ describe("Fetch tasks (GET)", () => {
         expect(response.status).toEqual(200);
         expect(response.data).toEqual(expected);
     });
-    
-    skip.test.("Fetch all tasks (500 Internal Server Error)", async () => {
-        //todo - Ikke mulig
+
+    test.("Fetch all tasks (500 Internal Server Error)", async () => {
+        //todo
     });
 
     test.("Fetch task (404 Not Found)", async () => {
         //todo
     });
 
-    skip.test.("Fetch task (500 Internal Server error)", async () => {
-        //todo - Ikke mulig når det 
+    test.("Fetch task (500 Internal Server error)", async () => {
+        //todo
     });
 });
 
