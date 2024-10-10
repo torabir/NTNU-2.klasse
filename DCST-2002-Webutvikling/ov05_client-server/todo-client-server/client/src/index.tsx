@@ -7,72 +7,87 @@ import taskService, { Task } from './task-service';
 class TaskList extends Component {
   tasks: Task[] = [];
 
-// A: 
-// Legger til en metode for å oppdatere den gitte task basert på id når checkbox endres: 
-toggleTaskDone(taskId: number) {
-  // Oppdaterer 'done'-statusen for riktig oppgave LOKALT
-  this.tasks = this.tasks.map((task) => {   
-    // Sjekker om den aktuelle oppgaven har samme id som taskId
-    if (task.id === taskId) {
-    // Lager et nytt Task-objekt med oppdatert 'done'-status
-    // Kan brukes for å kun endre én egenskap i objektet:  // const updatedTask = { ...task, done: !task.done };
+  // A: 
+  // Legger til en metode for å oppdatere den gitte task basert på id når checkbox endres
+  toggleTaskDone(taskId: number) {
+    // Oppdaterer 'done'-statusen for riktig oppgave LOKALT
+    this.tasks = this.tasks.map((task) => {
+      if (task.id === taskId) {
+        const updatedTask = {
+          id: task.id,
+          title: task.title,
+          done: !task.done // Toggler 'done'-statusen
+        };
 
-      const updatedTask = {
-        id: task.id,         // Beholder den opprinnelige id-en
-        title: task.title,  // Beholder den opprinnelige tittelen
-        done: !task.done    // Toggler 'done'-statusen (bytter mellom true og false)
-      };
+        // Logger data før den sendes til serveren
+        console.log(`Updating task with ID ${taskId}, done: ${updatedTask.done}`);
 
-      // Sender oppdateringen til serveren for å lagre den permanent
-      // Legger inn id og data som parametre i funksjonen
-      taskService.update(taskId, {done: updatedTask.done})
-        .then( () => {
-          console.info(`Task ${taskId} successfully updated on server`);
-        })
-        .catch((error) => {
-          console.error(`Failed to update task ${taskId} on server:`, error); 
-        })
-        console.log('Oppdaterer task:', taskId, 'med done-status:', updatedTask.done);
+        // Sender oppdateringen til serveren for å lagre den permanent
+        taskService.update(taskId, { done: updatedTask.done })
+          .then(() => {
+            console.info(`Task ${taskId} successfully updated on server`);
+          })
+          .catch((error) => {
+            console.error(`Failed to update task ${taskId} on server:`, error);
+          });
 
-      return updatedTask;  // Returnerer den oppdaterte oppgaven
-    } else {
-      return task; // Returnerer oppgaven uendret hvis id-en ikke matcher
-    }
-    
-  }); 
+        return updatedTask; // Returnerer den oppdaterte oppgaven
+      } else {
+        return task; // Returnerer oppgaven uendret hvis id-en ikke matcher
+      }
+    });
 
-  // Oppdater visningen ved å sette ny state
-  this.setState({ tasks: this.tasks });
-}
- 
+    // Oppdater visningen ved å sette ny state
+    this.setState({ tasks: this.tasks });
+  }
+
+  // B: Metode for å slette en oppgave
+  deleteTask(taskId: number) {
+    taskService.delete(taskId)
+      .then(() => {
+        this.tasks = this.tasks.filter((task) => task.id !== taskId);
+        this.setState({ tasks: this.tasks });
+        console.log(`Task ${taskId} successfully deleted.`);
+      })
+      .catch((error) => {
+        console.error(`Failed to delete task ${taskId}:`, error);
+      });
+  }
 
   render() {
     return (
       <Card title="Tasks">
-      {/*A: Legger til 1 rad med 2 kolonner for oversifter:  */}
-          <Row>
+        {/* A: Legger til 1 rad med 3 kolonner for overskrifter */}
+        <Row>
           <Column><strong>Title</strong></Column>
           <Column><strong>Done</strong></Column>
           <Column><strong>Delete</strong></Column>
-          </Row>
+        </Row>
         {this.tasks.map((task) => (
           <Row key={task.id}>
             <Column>{task.title}</Column>
-          {/* B: Checkbox for å markere oppgaven som done/ikke done */}
-            <Column><input type="checkbox" checked = {task.done} onChange={() => this.toggleTaskDone(task.id)}/></Column>
-            <Column>{"delete"}</Column>
+            {/* B: Checkbox for å markere oppgaven som done/ikke done */}
+            <Column>
+              <input
+                type="checkbox"
+                checked={task.done}
+                onChange={() => this.toggleTaskDone(task.id)}
+              />
+            </Column>
+            <Column>
+              <Button.Danger small onClick={() => this.deleteTask(task.id)}>X</Button.Danger>
+            </Column>
           </Row>
         ))}
       </Card>
     );
   }
 
-  // A: 
+  // A: Når komponenten monteres, henter den alle oppgaver fra serveren
   mounted() {
     taskService.getAll().then((tasks) => {
-      (this.tasks = tasks) // Henter oppgavene fra serveren
+      this.tasks = tasks; // Henter oppgavene fra serveren
       this.setState({ tasks: this.tasks }); // Oppdaterer state for å vise oppgavene i UI
-
     });
   }
 }
@@ -99,8 +114,8 @@ class TaskNew extends Component {
           onClick={() => {
             taskService.create(this.title).then(() => {
               // Reloads the tasks in the Tasks component
-              TaskList.instance()?.mounted(); // .? meaning: call TaskList.instance().mounted() if TaskList.instance() does not return null
-              this.title = '';
+              TaskList.instance()?.mounted(); // .? = call TaskList.instance().mounted() if TaskList.instance() does not return null
+              this.title = ''; // Tømmer inputfeltet etter opprettelse
             });
           }}
         >
@@ -112,10 +127,11 @@ class TaskNew extends Component {
 }
 
 let root = document.getElementById('root');
-if (root)
+if (root) {
   createRoot(root).render(
     <>
       <TaskList />
       <TaskNew />
-    </>,
+    </>
   );
+}

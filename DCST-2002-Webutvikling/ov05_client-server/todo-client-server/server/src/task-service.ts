@@ -16,7 +16,7 @@ class TaskService {
       pool.query('SELECT * FROM Tasks WHERE id = ?', [id], (error, results: RowDataPacket[]) => {
         if (error) return reject(error);
 
-        resolve(results[0] as Task); // Dette som returneres av Promiset. Her en task
+        resolve(results[0] as Task); // Returnerer den første tasken som matcher ID-en
       });
     });
   }
@@ -29,7 +29,7 @@ class TaskService {
       pool.query('SELECT * FROM Tasks', [], (error, results: RowDataPacket[]) => {
         if (error) return reject(error);
 
-        resolve(results as Task[]); // promiset returnerer en liste med Tasks
+        resolve(results as Task[]); // Promiset returnerer en liste med Tasks
       });
     });
   }
@@ -44,7 +44,7 @@ class TaskService {
       pool.query('INSERT INTO Tasks SET title=?', [title], (error, results: ResultSetHeader) => {
         if (error) return reject(error);
 
-        resolve(results.insertId); // promiset returnerer et tall (ID-en til den opprettede oppgaven)
+        resolve(results.insertId); // Promiset returnerer et tall (ID-en til den opprettede oppgaven)
       });
     });
   }
@@ -58,7 +58,7 @@ class TaskService {
         if (error) return reject(error);
         if (results.affectedRows == 0) reject(new Error('No row deleted'));
 
-        resolve();
+        resolve(); // Bekrefter at slettingen var vellykket
       });
     });
   }
@@ -67,25 +67,22 @@ class TaskService {
 /**
  * Oppdaterer en oppgave i databasen.
  */
-  update(id: number, data: { done:boolean }){
-    return new Promise<void>((resolve, reject) => { // det inni <> er typen som returneres av Promiset (resolve)
+  update(id: number, data: { done: boolean }) {
+    return new Promise<void>((resolve, reject) => { // Det inni <> er typen som returneres av Promiset (resolve)
                                                     // Her void fordi det ikke er spesifisert hva som returneres 
       pool.query(
         'UPDATE tasks SET done = ? WHERE id = ?', [data.done, id], (error, results: ResultSetHeader) => {
-                                                 // [data.done, id] -> samme rekkefølge som SQL-spørringen
           if (error) return reject(error); 
 
-          // if (results.affectedRows === 0) er nødvendig i update- og delete spørringer for å sikre 
+          // if (results.affectedRows === 0) er nødvendig i update- og delete-spørringer for å sikre 
           // at en faktisk rad ble oppdatert eller slettet.
-
           if (results.affectedRows === 0) return reject(new Error('No task found to update'));
 
-          resolve(); // Oppdateringen var vellyket
+          resolve(); // Oppdateringen var vellykket
           console.log('Oppdaterer task med id:', id, 'og done-status:', data.done);
-
         }
-      )
-    })
+      );
+    });
   }
 }
 

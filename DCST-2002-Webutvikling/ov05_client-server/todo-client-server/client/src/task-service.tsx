@@ -35,13 +35,20 @@ class TaskService {
       .then((response) => response.data.id);
   }
 
-/**A: 
+  /**A: 
    * Update task with the given id and data.
    * 
    */
-  update(id: number, data: Partial<Task>){ // Partial<Task> - man trenger bare å oppdatere det man vil oppdatere, her  ...
-    return axios.put(`/tasks/${id}`, data) // sender put forespørsel til serveren på gitt id (PUT = endring av data)
-  }                                        // data er det som skal oppdateres 
+  update(id: number, data: Partial<Task>){ // Partial<Task> - man trenger bare å oppdatere det man vil oppdatere, her 'done'
+    return axios.put(`/tasks/${id}`, data) // sender PUT-forespørsel til serveren på gitt id (PUT = endring av data)
+  }                                        // 'data' er det som skal oppdateres 
+
+  /**
+   * Delete task with given id.
+   */
+  delete(id: number) {
+    return axios.delete(`/tasks/${id}`);  // Sender DELETE-forespørsel til serveren
+  }
 }
 
 const taskService = new TaskService();
