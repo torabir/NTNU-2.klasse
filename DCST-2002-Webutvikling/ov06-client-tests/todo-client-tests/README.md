@@ -2,6 +2,17 @@
 
 ## My notes: 
 
+###
+
+Viktig: 
+
+- Husk å importere det du skal teste øverst, feks legge til "Card", "Button" fra widgets, osv. 
+- Legg til en og en test
+- legg til consol.log i testen (be chat om riktig consol.log) for å finne ut av hva som er feil
+- Husk å oppdatere datasen med riktige kollonner
+- husk å skriv NØYAKTIG det samme i koden som i SQL-databsen (store/små bokstaver - feil oppdages ikke av chatGPT)
+
+
 ### Serverside: 
 
 Add a column in the table Tasks: 

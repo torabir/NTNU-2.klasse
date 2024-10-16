@@ -1,27 +1,21 @@
 import * as React from 'react';
-import { Alert } from '../src/widgets'; // Importerer Alert-komponenten fra widgets
-import { shallow } from 'enzyme'; // Importerer shallow-rendring fra Enzyme for å teste React-komponenter
+import { Alert, Card, Row, Column, Button, Form, NavBar} from '../src/widgets';
+import { shallow } from 'enzyme';
 
-// Gruppe med tester for Alert-komponenten
 describe('Alert tests', () => {
-  
-  // Test for å sikre at det ikke er noen alerts til stede ved oppstart
   test('No alerts initially', () => {
-    const wrapper = shallow(<Alert />); // Rendrer Alert-komponenten "shallow" (uten underkomponenter)
+    const wrapper = shallow(<Alert />);
 
-    // Forventer at Alert-komponenten rendres som en tom div når det ikke er noen alerts
     expect(wrapper.matchesElement(<div></div>)).toEqual(true);
   });
 
-  // Test for å vise en alert-melding
   test('Show alert message', (done) => {
-    const wrapper = shallow(<Alert />); // Rendrer Alert-komponenten
+    const wrapper = shallow(<Alert />);
 
-    Alert.danger('test'); // Trigger en "danger" alert med meldingen "test"
+    Alert.danger('test');
 
-    // Venter litt for at alert-meldingen skal vises asynkront
+    // Wait for events to complete
     setTimeout(() => {
-      // Sjekker at Alert-komponenten nå inneholder en div med meldingen og en knapp
       expect(
         wrapper.matchesElement(
           <div>
@@ -33,19 +27,17 @@ describe('Alert tests', () => {
         )
       ).toEqual(true);
 
-      done(); // Angir at testen er ferdig
+      done();
     });
   });
 
-  // Test for å lukke en alert-melding
   test('Close alert message', (done) => {
-    const wrapper = shallow(<Alert />); // Rendrer Alert-komponenten
+    const wrapper = shallow(<Alert />);
 
-    Alert.danger('test'); // Trigger en "danger" alert med meldingen "test"
+    Alert.danger('test');
 
-    // Venter litt for at alert-meldingen skal vises asynkront
+    // Wait for events to complete
     setTimeout(() => {
-      // Sjekker at Alert-komponenten nå inneholder meldingen "test" og en knapp
       expect(
         wrapper.matchesElement(
           <div>
@@ -57,48 +49,192 @@ describe('Alert tests', () => {
         )
       ).toEqual(true);
 
-      // Simulerer et klikk på "lukk" knappen i Alert-komponenten
       wrapper.find('button.btn-close').simulate('click');
 
-      // Etter klikk på knappen, sjekker at Alert er tilbake til en tom div
       expect(wrapper.matchesElement(<div></div>)).toEqual(true);
 
-      done(); // Angir at testen er ferdig
+      done();
+    });
+  });
+
+    //** */ A: 
+    // 
+    // Test som åpner 3 Alert meldinger, og lukker den 2. meldingen: 
+  test('Open 3 alerts and close the second one', (done) => {
+    const wrapper = shallow(<Alert />);
+
+    // Åpner tre meldinger
+    Alert.danger('Message 1');
+    Alert.danger('Message 2');
+    Alert.danger('Message 3');
+
+    // Vent for å sikre at meldingene vises
+    setTimeout(() => {
+      // Sjekker at alle tre meldinger vises
+      expect(
+        wrapper.matchesElement(
+          <div>
+            <div>
+              Message 1
+              <button />
+            </div>
+            <div>
+              Message 2
+              <button />
+            </div>
+            <div>
+              Message 3
+              <button />
+            </div>
+          </div>
+        )
+      ).toEqual(true);
+
+      // Lukker den andre meldingen
+      wrapper.find('button').at(1).simulate('click');
+
+      // Vent for å sjekke at meldingen er lukket
+      setTimeout(() => {
+        // Sjekker at den andre meldingen er lukket, og de to andre forblir
+        expect(
+          wrapper.matchesElement(
+            <div>
+              <div>
+                Message 1
+                <button />
+              </div>
+              <div>
+                Message 3
+                <button />
+              </div>
+            </div>
+          )
+        ).toEqual(true);
+
+        done();
+      });
     });
   });
 });
 
-// Del 2: Ny test som åpner flere alerts og lukker en spesifikk
-// Del 2: Ny test som åpner flere alerts og lukker en spesifikk
-describe('Alert tests', () => {
-  test('Open 3 alerts and close the second one', (done) => {
-    jest.setTimeout(10000); // Legg til dette for å øke timeout til 10 sekunder
-    const wrapper = shallow(<Alert />); // Rendrer Alert-komponenten
+// B
+//** */
+// 1. Test for Card-komponenten:
 
-    // Åpner tre alerts med forskjellige meldinger
-    Alert.info('Message 1');
-    Alert.info('Message 2');
-    Alert.info('Message 3');
+test('Card renders correctly', async () => {
+  const wrapper = shallow(
+    <Card title="Test Card">
+      <p>Card content</p>
+    </Card>
+  );
 
-    // Venter til meldinger er synlige
-    setTimeout(() => {
-      wrapper.update();
-      expect(wrapper.containsMatchingElement(<div>Message 1</div>)).toBe(true);
-      expect(wrapper.containsMatchingElement(<div>Message 2</div>)).toBe(true);
-      expect(wrapper.containsMatchingElement(<div>Message 3</div>)).toBe(true);
+  // Await rendering to finish
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
-      // Simulerer klikk på lukk-knappen for den andre meldingen
-      wrapper.find('button').at(1).simulate('click');
-
-      // Venter til meldingen blir fjernet
-      setTimeout(() => {
-        wrapper.update();
-        expect(wrapper.containsMatchingElement(<div>Message 1</div>)).toBe(true);
-        expect(wrapper.containsMatchingElement(<div>Message 2</div>)).toBe(false);
-        expect(wrapper.containsMatchingElement(<div>Message 3</div>)).toBe(true);
-        done(); // Angir at testen er ferdig
-      }, 0);
-    }, 0);
-  });
+  expect(wrapper.containsMatchingElement(<h5 className="card-title">Test Card</h5>)).toEqual(true);
+  expect(wrapper.containsMatchingElement(<p>Card content</p>)).toEqual(true);
 });
 
+// 2. Test for Row-komponenten:
+
+test('Row renders children', async () => {
+  const wrapper = shallow(
+    <Row>
+      <div>Row content</div>
+    </Row>
+  );
+
+  // Await rendering to finish
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(wrapper.contains(<div>Row content</div>)).toEqual(true);
+});
+
+
+// 3. Test for Column-komponenten:
+
+test('Column renders with width', async () => {
+  const wrapper = shallow(
+    <Column width={3}>
+      <p>Column content</p>
+    </Column>
+  );
+
+  // Await rendering to finish
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(wrapper.hasClass('col-3')).toEqual(true);
+  expect(wrapper.contains(<p>Column content</p>)).toEqual(true);
+});
+
+
+// 4. Test for Button.Success-komponenten:
+
+test('Button.Success renders and handles click', async () => {
+  const onClick = jest.fn();
+  const wrapper = shallow(<Button.Success onClick={onClick}>Click Me</Button.Success>);
+
+  // Simulate button click
+  wrapper.simulate('click');
+
+  // Await any potential side-effects
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(onClick).toHaveBeenCalled();
+  expect(wrapper.text()).toEqual('Click Me');
+});
+
+
+// 5. Test for Form.Input-komponenten:
+
+test('Form.Input renders and handles change', async () => {
+  const onChange = jest.fn();
+  const wrapper = shallow(<Form.Input type="text" value="Test" onChange={onChange} />);
+
+  // Simulate input change
+  wrapper.simulate('change', { currentTarget: { value: 'New Value' } });
+
+  // Await change handler
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(onChange).toHaveBeenCalled();
+  expect(wrapper.prop('value')).toEqual('Test');
+});
+
+
+// 6. Test for Form.Checkbox-komponenten:
+
+test('Form.Checkbox renders and handles change', async () => {
+  const onChange = jest.fn();
+  const wrapper = shallow(<Form.Checkbox checked={false} onChange={onChange} />);
+
+  // Simulate checkbox change
+  wrapper.simulate('change', { currentTarget: { checked: true } });
+
+  // Await change handler
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(onChange).toHaveBeenCalled();
+  expect(wrapper.prop('checked')).toEqual(false);
+});
+
+// 7: Test for Form.Select-komponenten:
+
+
+test('Form.Select renders and handles change', async () => {
+  const onChange = jest.fn();
+  const wrapper = shallow(
+    <Form.Select value="1" onChange={onChange}>
+      <option value="1">Option 1</option>
+      <option value="2">Option 2</option>
+    </Form.Select>
+  );
+
+  // Simulate select change
+  wrapper.simulate('change', { currentTarget: { value: '2' } });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(onChange).toHaveBeenCalled();
+  expect(wrapper.prop('value')).toEqual('1');
+});

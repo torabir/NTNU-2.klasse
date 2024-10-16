@@ -5,6 +5,7 @@ export type Task = {
   id: number;
   title: string;
   done: boolean;
+  description: string; 
 };
 
 class TaskService {
@@ -64,26 +65,42 @@ class TaskService {
   }
 
   // A:
-/**
- * Oppdaterer en oppgave i databasen.
- */
-  update(id: number, data: { done: boolean }) {
-    return new Promise<void>((resolve, reject) => { // Det inni <> er typen som returneres av Promiset (resolve)
-                                                    // Her void fordi det ikke er spesifisert hva som returneres 
+  /**
+   * Oppdaterer en oppgave i databasen.
+   */
+  update(task: Task) {
+    return new Promise<void>((resolve, reject) => {
       pool.query(
-        'UPDATE tasks SET done = ? WHERE id = ?', [data.done, id], (error, results: ResultSetHeader) => {
-          if (error) return reject(error); 
-
-          // if (results.affectedRows === 0) er nødvendig i update- og delete-spørringer for å sikre 
-          // at en faktisk rad ble oppdatert eller slettet.
-          if (results.affectedRows === 0) return reject(new Error('No task found to update'));
-
-          resolve(); // Oppdateringen var vellykket
-          console.log('Oppdaterer task med id:', id, 'og done-status:', data.done);
+        'UPDATE Tasks SET done = ? WHERE id = ?',  // Kun oppdaterer `done`-feltet i denne spørringen
+        [task.done, task.id],
+        (error, results: ResultSetHeader) => {
+          if (error) {
+            console.error('SQL update error:', error);  // Her logger vi SQL-feilen
+            return reject(error);  // Returner feilen
+          }
+          if (results.affectedRows === 0) {
+            return reject(new Error('No task found to update'));  // Hvis ingen rader er oppdatert
+          }
+          resolve();  // Hvis oppdateringen er vellykket
         }
       );
     });
   }
+  
+  
+  // Gammel: 
+  // update(task: Task) {
+  //   return new Promise<void>((resolve, reject) => {
+  //     pool.query(
+  //       'UPDATE tasks SET title = ?, done = ?, description = ? WHERE id = ?', [task.title, task.done, task.description, task.id],
+  //       (error, results: ResultSetHeader) => {
+  //         if (error) return reject(error);
+  //         if (results.affectedRows === 0) return reject(new Error('No task found to update'));
+  //         resolve();
+  //       }
+  //     );
+  //   });
+  // }
 }
 
 const taskService = new TaskService();

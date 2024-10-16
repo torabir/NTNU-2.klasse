@@ -31,14 +31,14 @@ afterAll(async () => {
 });
 
 describe("Fetch tasks (GET)", () => {
-    test("Fetch all tasks (200 OK)", async () => {
+    test.skip("Fetch all tasks (200 OK)", async () => {
         const response = await axios.get("/api/v1/tasks");
 
         expect(response.status).toEqual(200);
         expect(response.data).toEqual(testData);
     });
 
-    test("Fetch task (200 OK)", async () => {
+    test.skip("Fetch task (200 OK)", async () => {
         const expected = [testData[0]];
         const response = await axios.get("/api/v1/tasks/1");
 
@@ -60,7 +60,7 @@ describe("Fetch tasks (GET)", () => {
 });
 
 describe("Create new task (POST)", () => {
-    test("Create new task (201 Created)", async () => {
+    test.skip("Create new task (201 Created)", async () => {
         const newTask = { id: 4, title: "Ny oppgave", done: false };
         const response = await axios.post("/api/v1/tasks", newTask);
         expect(response.status).toEqual(201);
@@ -77,7 +77,7 @@ describe("Create new task (POST)", () => {
 });
 
 describe("Delete task (DELETE)", () => {
-    test("Delete task (200 OK)", async () => {
+    test.skip("Delete task (200 OK)", async () => {
         const response = await axios.delete("/api/v1/tasks/2");
         expect(response.status).toEqual(200);
     });

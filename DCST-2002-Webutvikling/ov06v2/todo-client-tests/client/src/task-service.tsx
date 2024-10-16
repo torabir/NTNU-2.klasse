@@ -2,12 +2,10 @@ import axios from 'axios';
 
 axios.defaults.baseURL = 'http://localhost:3000/api/v2';
 
-// Task er objektet (dataen) som metodene i klassen TaskService jobber med
 export type Task = {
   id: number;
   title: string;
   done: boolean;
-  description: string; 
 };
 
 class TaskService {
@@ -34,21 +32,6 @@ class TaskService {
     return axios
       .post<{ id: number }>('/tasks', { title: title })
       .then((response) => response.data.id);
-  }
-
-  /**A: 
-   * Update task with the given id and data.
-   * 
-   */
-  update(task: Task) {
-    return axios.put(`/tasks/${task.id}`, task);
-  }
-
-  /**
-   * Delete task with given id.
-   */
-  delete(id: number) {
-    return axios.delete(`/tasks/${id}`);  // Sender DELETE-forespørsel til serveren
   }
 }
 

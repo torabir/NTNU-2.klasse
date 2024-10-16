@@ -1,34 +1,65 @@
 import * as React from 'react';
-import { TaskList, TaskNew, TaskEdit, TaskDetails } from '../src/task-components'; // Importerer TaskList og TaskNew-komponenter
-import { shallow } from 'enzyme'; // Importerer shallow for å teste komponentene
-import { Form, Button } from '../src/widgets'; // Importerer widgets-komponenter som brukes i TaskNew
-import { NavLink } from 'react-router-dom'; // Importerer NavLink for navigasjon
-import toJson from 'enzyme-to-json';
-import taskService from '../src/task-service'; // Importerer taskService for mocking
+import { TaskList, TaskNew, TaskDetails, TaskEdit } from '../src/task-components'; // lagt til TaskDetails, TaskEdit 
+import * as Taskservice from '../src/task-service'; // lagt til . unødvendig fordi service mockes uansett. 
+import { shallow } from 'enzyme';
+import { Form, Button, Column } from '../src/widgets'; // Lagt til widgets
+import { NavLink } from 'react-router-dom';
 
-// Mocking (simulering) av TaskService for testing
-jest.mock('../src/task-service', () => ({
-  getAll: jest.fn(() => Promise.resolve([
-    { id: 1, title: 'Les leksjon', done: false },
-    { id: 2, title: 'Møt opp på forelesning', done: false },
-    { id: 3, title: 'Gjør øving', done: false },
-  ])),
-  get: jest.fn(() => Promise.resolve({
-    id: 1, title: 'Les leksjon', description: 'Les kapittel 1', done: false
-  })),
-  create: jest.fn(() => Promise.resolve(4)), // Mock for create, returnerer id-en til en ny oppgave
-  update: jest.fn(() => Promise.resolve()),  // Mock for update, løser bare et promise uten retur
-  delete: jest.fn(() => Promise.resolve())   // Mock for delete, løser bare et promise uten retur
-}));
+
+// jest.mock('../src/task-service', () => {
+//   class TaskService {
+//     getAll() {
+//       return Promise.resolve([
+//         { id: 1, title: 'Les leksjon', done: false },
+//         { id: 2, title: 'Møt opp på forelesning', done: false },
+//         { id: 3, title: 'Gjør øving', done: false },
+//       ]);
+//     }
+
+//     create() {
+//       return Promise.resolve(4); // Same as: return new Promise((resolve) => resolve(4));
+//     }
+//   }
+//   return new TaskService();
+// });
+
+jest.mock('../src/task-service', () => {
+  class TaskService {
+    getAll() {
+      return Promise.resolve([
+        { id: 1, title: 'Les leksjon', description: 'Les kapittel 1', done: false },
+        { id: 2, title: 'Møt opp på forelesning', description: 'Møt opp i rom A101', done: false },
+        { id: 3, title: 'Gjør øving', description: 'Fullfør øving 1', done: false },
+      ]);
+    }
+
+    get() {
+      return Promise.resolve({ id: 1, title: 'Les leksjon', description: 'Les kapittel 1', done: false });
+    }
+
+    create() {
+      return Promise.resolve(4); // Returnerer en ny oppgave-id (4)
+    }
+
+    update() {
+      return Promise.resolve(); // Returnerer ingenting ved oppdatering
+    }
+
+    delete() {
+      return Promise.resolve(); // Returnerer ingenting ved sletting
+    }
+  }
+
+  return new TaskService();
+});
+
 
 describe('Task component tests', () => {
-  // Test for å sjekke at TaskList tegner opp riktig
   test('TaskList draws correctly', (done) => {
-    const wrapper = shallow(<TaskList />); // Renderer TaskList-komponenten
+    const wrapper = shallow(<TaskList />);
 
-    // Vent for at asynkrone operasjoner fullføres
+    // Wait for events to complete
     setTimeout(() => {
-      // Forventer at TaskList inneholder lenker til oppgaver med riktig tekst
       expect(
         wrapper.containsAllMatchingElements([
           <NavLink to="/tasks/1">Les leksjon</NavLink>,
@@ -36,116 +67,153 @@ describe('Task component tests', () => {
           <NavLink to="/tasks/3">Gjør øving</NavLink>,
         ])
       ).toEqual(true);
-      done(); // Angir at testen er ferdig
-    }, 0);
+      done();
+    });
   });
 
-  // Test for å sjekke at TaskNew setter riktig URL når en oppgave opprettes
   test('TaskNew correctly sets location on create', (done) => {
-    const wrapper = shallow(<TaskNew />); // Renderer TaskNew-komponenten
+    const wrapper = shallow(<TaskNew />);
 
-    // Simulerer at brukeren skriver "Kaffepause" i input-feltet
     wrapper.find(Form.Input).simulate('change', { currentTarget: { value: 'Kaffepause' } });
-    
-    // Forventer at input-feltet har verdien "Kaffepause"
+    // @ts-ignore
     expect(wrapper.containsMatchingElement(<Form.Input value="Kaffepause" />)).toEqual(true);
 
-    // Simulerer at brukeren klikker på "Lagre" knappen
     wrapper.find(Button.Success).simulate('click');
-
-    // Vent for at asynkrone operasjoner fullføres
+    // Wait for events to complete
     setTimeout(() => {
-      // Forventer at brukeren omdirigeres til oppgavelisten med den nye oppgaven (#/tasks/4)
       expect(location.hash).toEqual('#/tasks/4');
-      done(); // Angir at testen er ferdig
-    }, 0);
+      done();
+    });
   });
 });
 
-// Test for å sjekke at TaskDetails tegner opp riktig
-describe('TaskDetails component tests', () => {
-  test('TaskDetails draws correctly', (done) => {
-    jest.setTimeout(10000); // Øk timeout til 10 sekunder
-    const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />); // Renderer TaskDetails-komponenten
-    
-    // Simulerer at taskService returnerer en oppgave med spesifikke detaljer
-    setTimeout(() => {
-      wrapper.update();
-      expect(wrapper.containsMatchingElement(<div>Title: Les leksjon</div>)).toBe(true);
-      expect(wrapper.containsMatchingElement(<div>Description: Les kapittel 1</div>)).toBe(true);
-      done(); // Angir at testen er ferdig
-    }, 0);
-  });
-});
 
-test('TaskDetails snapshot test', () => {
+// A: 
+//**
+// TaskDetails component tests: 
+
+test('TaskDetails draws correctly', async () => {
   const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
-  
-  // Tar et snapshot av komponentens nåværende tilstand
-  expect(toJson(wrapper)).toMatchSnapshot();
+
+  // Await mounted() and data fetching
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  console.log(wrapper.debug()); // Denne vil vise hele strukturen til wrapperen
+
+  expect(
+    wrapper.containsAllMatchingElements([
+      <Column>Les leksjon</Column>, // Forventet tittel
+      <Column>Les kapittel 1</Column>, // Forventet beskrivelse
+      <Form.Checkbox checked={false} disabled /> // Forventet "done" checkbox (ikke ferdig)
+    ])
+  ).toEqual(true);
 });
 
-// Del 3: 
-// Tester for TaskEdit:
+//B 
+//** */
+// Snapshot: 
 
-describe('TaskEdit component tests', () => {
-  // Test for å sjekke om TaskEdit oppdaterer oppgaven riktig
-  test('TaskEdit updates task correctly', (done) => {
-    jest.setTimeout(10000); // Øk timeout til 10 sekunder
-    const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />); // Renderer TaskEdit-komponenten
+test('TaskDetails matches snapshot', async () => {
+  const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
 
-    // Simulerer at brukeren endrer tittel på oppgaven
-    wrapper.find(Form.Input).simulate('change', { currentTarget: { value: 'Ny tittel' } });
-    
-    // Simulerer at brukeren klikker på "Save"-knappen
-    wrapper.find(Button.Success).simulate('click');
-    
-    setTimeout(() => {
-      // Sjekker at taskService.update ble kalt med den oppdaterte oppgaven
-      expect(taskService.update).toHaveBeenCalledWith({
-        id: 1,
-        title: 'Ny tittel',
-        description: 'Les kapittel 1',
-        done: false
-      });
-      done();
-    }, 0);
-  });
+  // Await mounted() and data fetching
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
-  // Test for å sjekke at TaskEdit sletter en oppgave riktig
-  test('TaskEdit deletes task correctly', (done) => {
-    jest.setTimeout(10000); // Øk timeout til 10 sekunder
-    const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />); // Renderer TaskEdit-komponenten
-
-    // Simulerer at brukeren klikker på "Delete"-knappen
-    wrapper.find(Button.Danger).simulate('click');
-    
-    setTimeout(() => {
-      // Sjekker at taskService.delete ble kalt med riktig id
-      expect(taskService.delete).toHaveBeenCalledWith(1);
-      done();
-    }, 0);
-  });
+  // Sammenlign wrapper med snapshot
+  expect(wrapper).toMatchSnapshot();
 });
 
-// Testing for feilhåndtering (simulerer feil i TaskService): 
+// C
+//** */
+// Oppnå 70% dekning for statements: 
 
-describe('TaskEdit error handling tests', () => {
-  // Test for å sjekke feilhåndtering ved oppdatering av en oppgave
-  test('TaskEdit handles update errors', (done) => {
-    jest.setTimeout(10000); // Øk timeout til 10 sekunder
-    const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />);
+// Test for TaskEdit-komponenten:
 
-    // Simulerer at brukeren endrer tittel på oppgaven
-    wrapper.find(Form.Input).simulate('change', { currentTarget: { value: 'Ny tittel' } });
+test('TaskEdit draws correctly and updates task', async () => {
+  const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />);
 
-    // Simulerer at brukeren klikker på "Save"-knappen
-    wrapper.find(Button.Success).simulate('click');
-    
-    setTimeout(() => {
-      // Sjekker at en feil vises via Alert-komponenten
-      expect(wrapper.containsMatchingElement(<div>Error updating task: Network error</div>)).toBe(true);
-      done();
-    }, 0);
-  });
+  // Await mounted() and data fetching
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Check if the form is rendered with correct values
+  expect(wrapper.find(Form.Input).prop('value')).toEqual('Les leksjon');
+  expect(wrapper.find(Form.Textarea).prop('value')).toEqual('Les kapittel 1');
+  expect(wrapper.find(Form.Checkbox).prop('checked')).toEqual(false);
+
+  // Simulate form changes
+  wrapper.find(Form.Input).simulate('change', { currentTarget: { value: 'Ny tittel' } });
+  wrapper.find(Form.Textarea).simulate('change', { currentTarget: { value: 'Ny beskrivelse' } });
+  wrapper.find(Form.Checkbox).simulate('change', { currentTarget: { checked: true } });
+
+  // Check if the form reflects the new values
+  expect(wrapper.containsMatchingElement(<Form.Input value="Ny tittel" />)).toEqual(true);
+  expect(wrapper.containsMatchingElement(<Form.Textarea value="Ny beskrivelse" />)).toEqual(true);
+  expect(wrapper.containsMatchingElement(<Form.Checkbox checked={true} />)).toEqual(true);
+
+  // Simulate save button click
+  wrapper.find(Button.Success).simulate('click');
+
+  // Ensure that the update service is called
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(location.hash).toEqual('#/tasks/1');
 });
+
+// Test for sletting i TaskEdit-komponenten:
+
+test('TaskEdit deletes task and navigates away', async () => {
+  const wrapper = shallow(<TaskEdit match={{ params: { id: 1 } }} />);
+
+  // Await mounted() and data fetching
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Simulate delete button click
+  wrapper.find(Button.Danger).simulate('click');
+
+  // Ensure that the delete service is called and navigation happens
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(location.hash).toEqual('#/tasks');
+});
+
+
+
+// ERRORS: 
+
+
+// Bruker ikke async/await
+// test('TaskDetails draws correctly', (done) => {
+//   const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
+
+//   // Vent til "mounted" har kjørt og oppgaven er hentet
+//   setTimeout(() => {
+//     console.log(wrapper.debug()); // Denne vil vise hele strukturen til wrapperen
+
+//     expect(
+//       wrapper.containsAllMatchingElements([
+//         <Column>Les leksjon</Column>, // Forventet tittel
+//         <Column>Les kapittel 1</Column>, // Forventet beskrivelse
+//         <Form.Checkbox checked={false} disabled /> // Forventet "done" checkbox (ikke ferdig)
+//       ])
+//     ).toEqual(true);
+//     done();
+//   });
+// });
+
+// Feilen her var at jeg bruker h1, p, osv. 
+// describe('TaskDetails component tests', () => {
+//   test('TaskDetails draws correctly', (done) => {
+//     const wrapper = shallow(<TaskDetails match={{ params: { id: 1 } }} />);
+
+//     // Vi venter på eventer for at mock-get-tjenesten skal returnere verdier
+//     setTimeout(() => {
+//       console.log(wrapper.html()); // Logg ut den faktiske renderen av komponenten
+//       expect(
+//         wrapper.containsAllMatchingElements([
+//           <h1>Task Details</h1>,
+//           <p>Title: Les leksjon</p>,
+//           <p>Status: Not done</p>,
+//         ])
+//       ).toEqual(true);
+//       done();
+//     });
+//   });
+// });

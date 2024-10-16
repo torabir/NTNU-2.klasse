@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`TaskDetails snapshot test 1`] = `
+exports[`TaskDetails matches snapshot 1`] = `
 <Fragment>
   <Card
     title="Task"
@@ -11,7 +11,9 @@ exports[`TaskDetails snapshot test 1`] = `
       >
         Title:
       </Column>
-      <Column />
+      <Column>
+        Les leksjon
+      </Column>
     </Row>
     <Row>
       <Column
@@ -19,7 +21,9 @@ exports[`TaskDetails snapshot test 1`] = `
       >
         Description:
       </Column>
-      <Column />
+      <Column>
+        Les kapittel 1
+      </Column>
     </Row>
     <Row>
       <Column

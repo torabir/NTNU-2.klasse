@@ -48,23 +48,42 @@ router.delete('/tasks/:id', (request, response) => {
 /**
  * PUT-rute for å oppdatere oppgave basert på ID.
  * Forventet request body: { done: true/false }
- */
+ */ 
+
 router.put('/tasks/:id', (request, response) => {
-  const id = Number(request.params.id); // Henter oppgave-ID fra URL-en og konverter til et tall
-  const { done } = request.body;        // Henter 'done'-status fra request.body
+  const id = Number(request.params.id);
+  const { done } = request.body;
 
-  // ** request.body inneholder dataen som sendes i kroppen av en HTTP-forespørsel, 
-  // vanligvis i POST- eller PUT-forespørsler. Det brukes til å få tilgang til innholdet klienten har sendt til serveren. **
+  console.log('Received PUT request for task:', { id, done });  // Legg til logging her for å bekrefte dataen
 
-  // Validerer at 'done' er en boolean (true/false)
-  if (typeof done !== 'boolean') {
-    return response.status(400).send('Invalid data format for "done"'); 
+  if (typeof done === 'boolean') {
+    taskService
+      .get(id)
+      .then((task) => {
+        if (!task) return response.status(404).send('Task not found');
+
+        const updatedTask = { ...task, done: done };
+
+        taskService.update(updatedTask)
+          .then(() => response.sendStatus(200))
+          .catch((error) => response.status(500).send(error));
+      })
+      .catch((error) => response.status(500).send(error));
+  } else {
+    response.status(400).send('Invalid data');
   }
-
-  taskService
-    .update(id, { done }) // Kaller update service for å oppdatere oppgaven
-    .then(() => response.sendStatus(200)) // Sender svar hvis oppdatering er vellykket
-    .catch((error) => response.status(500).send(error)); // Feilhåndtering
 });
+
+
+// GAMMEL: 
+// router.put('/tasks/:id', (request, response) => {
+//   const id = Number(request.params.id);
+//   const task = request.body;
+
+//   taskService
+//     .update(id, task)
+//     .then(() => response.sendStatus(200))
+//     .catch((error) => response.status(500).send(error));
+// });
 
 export default router;

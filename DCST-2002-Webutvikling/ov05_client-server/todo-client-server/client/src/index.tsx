@@ -10,36 +10,57 @@ class TaskList extends Component {
   // A: 
   // Legger til en metode for å oppdatere den gitte task basert på id når checkbox endres
   toggleTaskDone(taskId: number) {
-    // Oppdaterer 'done'-statusen for riktig oppgave LOKALT
     this.tasks = this.tasks.map((task) => {
       if (task.id === taskId) {
         const updatedTask = {
-          id: task.id,
-          title: task.title,
-          done: !task.done // Toggler 'done'-statusen
+          ...task,
+          done: !task.done
         };
-
-        // Logger data før den sendes til serveren
-        console.log(`Updating task with ID ${taskId}, done: ${updatedTask.done}`);
-
-        // Sender oppdateringen til serveren for å lagre den permanent
-        taskService.update(taskId, { done: updatedTask.done })
+  
+        console.log('Updating task:', updatedTask);  // Legg til logging her for å se at riktig data sendes
+  
+        taskService.update(updatedTask)
           .then(() => {
             console.info(`Task ${taskId} successfully updated on server`);
           })
           .catch((error) => {
             console.error(`Failed to update task ${taskId} on server:`, error);
           });
-
-        return updatedTask; // Returnerer den oppdaterte oppgaven
+  
+        return updatedTask;
       } else {
-        return task; // Returnerer oppgaven uendret hvis id-en ikke matcher
+        return task;
       }
     });
-
-    // Oppdater visningen ved å sette ny state
+  
     this.setState({ tasks: this.tasks });
   }
+  
+  // toggleTaskDone(taskId: number) {
+  //   this.tasks = this.tasks.map((task) => {
+  //     if (task.id === taskId) {
+  //       const updatedTask = {
+  //         ...task,              // Kopierer alle egenskaper fra task
+  //         done: !task.done      // Toggler done-status
+  //       };
+  
+  //       taskService.update(updatedTask)  // Sender hele updatedTask-objektet
+  //         .then(() => {
+  //           console.info(`Task ${taskId} successfully updated on server`);
+  //         })
+  //         .catch((error) => {
+  //           console.error(`Failed to update task ${taskId} on server:`, error);
+  //         });
+  
+  //       return updatedTask;
+  //     } else {
+  //       return task;
+  //     }
+  //   });
+  
+  //   this.setState({ tasks: this.tasks });
+  // }
+  
 
   // B: Metode for å slette en oppgave
   deleteTask(taskId: number) {
