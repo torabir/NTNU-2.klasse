@@ -1,0 +1,14 @@
+# myApp/docker-compose.yaml
+services:
+  frontend:
+    build: ./client
+    container_name: frontend_c
+    ports:
+      - '3000:3000'
+  backend:
+    build: ./server
+    container_name: backend_c
+    ports:
+      - '4000:4000'
+    stdin_open: true
+    tty: true
