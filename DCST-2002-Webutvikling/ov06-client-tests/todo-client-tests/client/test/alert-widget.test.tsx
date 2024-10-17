@@ -119,7 +119,7 @@ describe('Alert tests', () => {
 
 // B
 //** */
-// 1. Test for Card-komponenten:
+// 1. Test for Card-komponenten, nå med async/await:
 
 test('Card renders correctly', async () => {
   const wrapper = shallow(
