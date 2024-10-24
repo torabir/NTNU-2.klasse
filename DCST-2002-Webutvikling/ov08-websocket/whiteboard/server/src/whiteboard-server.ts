@@ -2,20 +2,22 @@ import type http from 'http';
 import type https from 'https';
 import WebSocket from 'ws';
 
-/**
- * Whiteboard server
- */
 export default class WhiteboardServer {
-  /**
-   * Constructs a WebSocket server that will respond to the given path on webServer.
-   */
   constructor(webServer: http.Server | https.Server, path: string) {
-    const server = new WebSocket.Server({ server: webServer, path: path + '/whiteboard' });
+    const whiteboardServer = new WebSocket.Server({ server: webServer, path: path + '/whiteboard' });
+    const messageServer = new WebSocket.Server({ server: webServer, path: path + '/messages' }); // Ny websocket
 
-    server.on('connection', (connection, _request) => {
+    // Whiteboard-tilkoblinger
+    whiteboardServer.on('connection', (connection, _request) => {
       connection.on('message', (message) => {
-        // Send the message to all current client connections
-        server.clients.forEach((connection) => connection.send(message.toString()));
+        whiteboardServer.clients.forEach((client) => client.send(message.toString()));
+      });
+    });
+
+    // Meldingsserver
+    messageServer.on('connection', (connection, _request) => {
+      connection.on('message', (message) => {
+        messageServer.clients.forEach((client) => client.send(message.toString())); // Send melding til alle klienter
       });
     });
   }
